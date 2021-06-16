@@ -1,0 +1,21 @@
+---
+# Ansible defaults file
+#
+# unifi-controller role variables
+
+unifi:
+  base: '/usr/lib/unifi'
+  site_id: 'default'
+  vhost:
+    name: 'unifi'
+    site_name: 'unifi.example.com'
+
+    admin_mail: '{{ admin_mail }}'
+
+    https_enabled: true
+    https_letsencrypt: false
+    https_redirect: true
+    cert: '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+    key: '/etc/ssl/private/ssl-cert-snakeoil.key'
+
+...

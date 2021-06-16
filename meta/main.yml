@@ -1,0 +1,27 @@
+---
+# Ansible meta info
+#
+# unifi-controller dependencies
+
+dependencies:
+  - role: webserver
+    tags:
+      - webserver
+    vars:
+      webserver:
+        packages:
+          - 'apache2'
+        modules:
+          - 'expires'
+          - 'headers'
+          - 'http2'
+          - 'info'
+          - 'proxy_fcgi'
+          - 'proxy_http'
+          - 'proxy_wstunnel'
+          - 'rewrite'
+          - 'ssl'
+
+...
+
+

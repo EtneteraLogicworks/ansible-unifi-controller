@@ -1,0 +1,73 @@
+{% macro unifi_config() -%}
+    # Encoded slashes need to be allowed
+    AllowEncodedSlashes     NoDecode
+    ProxyPass "/wss/" "wss://localhost:8443/wss/"
+    ProxyPassReverse "/wss/" "wss://localhost:8443/wss/"
+    ProxyPass "/" "https://localhost:8443/"
+    ProxyPassReverse "/" "https://localhost:8443/"
+    SSLProxyEngine on
+    SSLProxyVerify none
+    SSLProxyCheckPeerCN off
+    SSLProxyCheckPeerName off
+    SSLProxyCheckPeerExpire off
+    Header set Host {{ vhost.site_name }}
+    RequestHeader set Host localhost:8443
+    Header unset Referer
+    RequestHeader unset Referer
+    RequestHeader unset Origin
+{%- endmacro %}
+
+<VirtualHost *:80>
+    ServerName {{ vhost.site_name }}
+{% if vhost.aliases is defined %}
+    ServerAlias {{ vhost.aliases | join(' ') }}
+{% endif %}
+    ServerAdmin {{ vhost.admin_mail }}
+
+    LogLevel warn
+    ErrorLog ${APACHE_LOG_DIR}/{{ vhost.name }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ vhost.name }}_access.log combined
+
+{% if vhost.https_enabled and vhost.https_redirect %}
+    Include includes/https_redirect.conf
+{% else %}
+    {{ unifi_config() }}
+{% endif %}
+
+</VirtualHost>
+
+{% if vhost.https_enabled %}
+<VirtualHost *:443>
+    ServerName {{ vhost.site_name }}
+{% if vhost.aliases is defined %}
+    ServerAlias {{ vhost.aliases | join(' ') }}
+{% endif %}
+    ServerAdmin {{ vhost.admin_mail }}
+
+    LogLevel warn
+    ErrorLog ${APACHE_LOG_DIR}/{{ vhost.name }}_error.log
+    CustomLog ${APACHE_LOG_DIR}/{{ vhost.name }}_access.log combined
+
+    Protocols h2 http/1.1
+
+{# TLS 1.3 available since Debian 10 #}
+{% if ansible_distribution_version | int >= 10 %}
+    Include includes/tls_1.3-1.2.conf
+{% else %}
+    Include includes/tls1-2.conf
+{% endif %}
+{% if vhost.https_letsencrypt %}
+    SSLCertificateFile {{ simp_le.home_dir }}/simp_le/{{ vhost.name }}/fullchain.pem
+    SSLCertificateKeyFile {{ simp_le.home_dir }}/simp_le/{{ vhost.name }}/key.pem
+{% else %}
+    SSLCertificateFile {{ vhost.cert }}
+    SSLCertificateKeyFile {{ vhost.key }}
+{%   if vhost.chain is defined %}
+    SSLCertificateChainFile {{ vhost.chain }}
+{%   endif %}
+{% endif %}
+
+    {{ unifi_config() }}
+
+</VirtualHost>
+{% endif %}

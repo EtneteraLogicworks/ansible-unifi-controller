@@ -1,0 +1,85 @@
+---
+# Ansible role
+#
+# lxc role tasks
+
+- name: Add UniFi repository key
+  environment: '{{ proxy_env | default({}) }}'
+  apt_key:
+    keyserver: 'keyserver.ubuntu.com'
+    id: '06E85760C0A52C50'
+    state: present
+
+- name: Add UniFi repository
+  apt_repository:
+    repo: 'deb https://www.ui.com/downloads/unifi/debian stable ubiquiti'
+    state: present
+
+# dpkg_selections does not work
+- name: Prevent installing OpenJDK11
+  command: >
+    apt-mark hold openjdk-11-*
+  changed_when: false
+
+- name: Install UniFi packages
+  apt:
+    update_cache: true
+    name:
+      - 'unifi'
+
+
+- name: UniFi custom config
+  block:
+    - name: Create directories for custom config
+      file:
+        state: directory
+        dest: '{{ unifi.base }}/data/sites/{{ unifi.site_id }}'
+        owner: 'unifi'
+        group: 'unifi'
+
+    - name: Create custom config file
+      copy:
+        dest: '{{ unifi.base }}/data/sites/{{ unifi.site_id }}/config.gateway.json'
+        owner: 'unifi'
+        group: 'unifi'
+        content: |
+          {{ unifi.custom_config | to_json }}
+
+  when: unifi.custom_config | default(false)
+  tags:
+    - unifi-custom
+
+
+- name: Apache reverse proxy configuration
+  block:
+    - name: Create certificate for the vhost
+      include_tasks: 'includes/letsencrypt/main.yml'
+      vars:
+        certificate: '{{ unifi.vhost }}'
+        # nespousti na backup serveru, pokud existuje HA setup
+      when: unifi.vhost.https_letsencrypt and failover_role != 'backup'
+      tags:
+        - certs
+        - letsencrypt
+
+    - name: Create Apache vhost configuration
+      template:
+        src: 'unifi-controller.conf.j2'
+        dest: '/etc/apache2/sites-available/{{ unifi.vhost.name }}.conf'
+      vars:
+        vhost: '{{ unifi.vhost }}'
+      notify: Reload apache
+
+    - name: Activate Apache vhost
+      file:
+        path: '/etc/apache2/sites-enabled/{{ unifi.vhost.name }}.conf'
+        state: link
+        src: '../sites-available/{{ unifi.vhost.name }}.conf'
+        force: true
+      notify: Reload apache
+
+  tags:
+    - unifi-web
+    - vhost
+
+...
